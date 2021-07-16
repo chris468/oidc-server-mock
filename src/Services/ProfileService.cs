@@ -16,6 +16,7 @@ namespace OpenIdConnectServer.Services
     internal class ProfileService : IProfileService
     {
         private const int MaximumInlineClaimCount = 5;
+        private const bool IncludeDistributedClaimsInUserInfo = false;
 
         private readonly TestUserStore _userStore;
         private readonly ILogger Logger;
@@ -38,7 +39,9 @@ namespace OpenIdConnectServer.Services
             {
                 Logger.LogDebug("The user was found in store");
                 IEnumerable<Claim> claims = context.FilterClaims(user.Claims);
-                claims = SwapOutDistributedClaims(claims);
+                bool includeDistributedClaims = IncludeDistributedClaimsInUserInfo
+                    || context.Caller != IdentityServerConstants.ProfileDataCallers.UserInfoEndpoint;
+                claims = this.HandleDistributedClaims(claims, includeDistributedClaims);
                 context.AddRequestedClaims(claims);
             }
             return Task.CompletedTask;
@@ -54,7 +57,7 @@ namespace OpenIdConnectServer.Services
             return Task.CompletedTask;
         }
 
-        internal IEnumerable<Claim> SwapOutDistributedClaims(IEnumerable<Claim> claims)
+        private IEnumerable<Claim> HandleDistributedClaims(IEnumerable<Claim> claims, bool includeDistributedClaims)
         {
             var result = new List<Claim>();
             var claimNames = new Dictionary<string, string>();
@@ -76,7 +79,7 @@ namespace OpenIdConnectServer.Services
                 }
             }
 
-            if (claimNames.Any())
+            if (includeDistributedClaims && claimNames.Any())
             {
                 result.Add(new Claim("_claim_names", JsonConvert.SerializeObject(claimNames), IdentityServerConstants.ClaimValueTypes.Json));
                 result.Add(new Claim("_claim_sources", JsonConvert.SerializeObject(claimSources), IdentityServerConstants.ClaimValueTypes.Json));
